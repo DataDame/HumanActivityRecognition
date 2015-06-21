@@ -1,0 +1,91 @@
+---
+title: "Human Activity Recognition"
+author: "Suma Krishnaprasad"
+date: "June 20, 2015"
+output: html_document
+---
+##Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The main objectives of this project are - 
+Build a prediction model using the training data set to predict the manner in which the                                      participants performed the exercise depicted by the classe variable.
+Use cross validation in the model for better accuracy.
+Calculate the out of sample error and apply the model to 20 test cases.
+
+#Data loading
+```{r}
+library(knitr)
+library(caret)
+library(randomForest)
+
+setwd("~/Documents/DataScience/HAR")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv", method="curl")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv", method="curl")
+
+traindata <- read.csv("pml-training.csv",na.strings=c("NA",""))
+testdata <-read.csv("pml-testing.csv",na.strings=c("NA",""))
+```
+
+#Exploratory Data Analysis
+Accelorometer, gyroscope and magnetometer readings were captured from four mounts - belt, glove, armband and dumbell. Euler angle measurements of roll, pitch and yaw were taken for each type of reading on each mount. Eight features: mean, variance, standard deviation, max, min, amplitude, kurtosis and skewness were calculated for each of the Euler angles and mounts resulting in 96 feature sets. Only raw readings are used and calculated features are omitted for our model.
+
+```{r}
+colNA <- colSums(is.na(traindata))        
+calccols <- colNA >= 19000             
+rawtraindata <- traindata[!calccols]        
+rawtraindata <- rawtraindata[, c(7:60)]
+summary(rawtraindata)
+
+colNA <- colSums(is.na(testdata))         
+calccols <- colNA >= 20                
+rawtestdata <- testdata[!calccols]    
+rawtestdata <- rawtestdata[, c(7:60)]
+```
+
+##Prediction Model
+
+First the training data set is partitioned into training and testing data set.
+
+```{r}
+part <- createDataPartition(y = rawtraindata$classe, p = 0.6, list = FALSE)
+train1 <- rawtraindata[part, ]
+test1 <- rawtraindata[-part, ]
+```
+
+Random forest machine learning algorithm with 10-fold cross validation will be used for our prediction model.
+
+```{r}
+model <- train(classe ~ ., data = train1, method = "rf", prox = TRUE, trControl = trainControl(method = "cv", number = 10, allowParallel = TRUE))
+train_pred <- predict(model, train1)
+confusionMatrix(train_pred, train1$classe)
+```
+
+#Out of sample accuracy
+The model is applied to the test data partition of the training data set to calculate the out of sample accuracy
+
+```{r}
+test_pred <- predict(model, test1)
+confusionMatrix(test_pred, test1$classe)
+```
+
+As can be seen from the above statistics the out of sample accuracy is 99.76%
+
+Finally the model is applied to the 20 test cases provided and the classe value is predicted.
+The predictions are output into files and upon submission we see that we all 20 predictionas were correct.
+
+```{r}
+answers <- predict(model, rawtestdata)
+answers <- as.character(answers)
+answers
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
+#Conclusion
+Random forest with 10-fold validation provided a high accuracy prediction for the data set provided and was a good choice for this project. Future improvements would be to analyze the correlation between the 150 variables and the classe value and to pick the top 'X' features in the prediction model for faster and more optimized prediction. This model will not work if the system needs to provide real-time feedback to the participant as it took about 30 minutes to create the model.
